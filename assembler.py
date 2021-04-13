@@ -13,12 +13,12 @@ class Assembler:
 
     def __init__(self):
         """Initialize assembler attributes"""
-        self.x = 0
 
-        #init tables and other variables
+        #tables
         self.optab = Optab()
         self.symtab = Symtab()
-
+        
+        #program information
         self.locctr = 0
         self.progCounter = 0x0
         self.baseReg = 0x0
@@ -27,9 +27,12 @@ class Assembler:
         self.progLength = 0x0
 
         #flag bits
-        self.b = 0b0
-        self.p = 0b1
-        self.e = 0b0
+        self.n = 0
+        self.i = 0
+        self.x = 0
+        self.b = 0
+        self.p = 0
+        self.e = 0
         
         #constants (not actaully constant)
         self.SYMBOL = 0
@@ -58,6 +61,7 @@ class Assembler:
             elif command[0:2] == '-o':
                 if '.txt' in command[3:]:
                     self.open_file(command[3:])
+                    print("Done!")
                     
             #print all commands
             elif command[0:2] == '-h':
@@ -83,6 +87,7 @@ class Assembler:
         
         print("Beginning assembly process.")
         self.assemble(content)
+        print("Assembly complete.")
 
 
     def assemble(self, content):
@@ -92,6 +97,8 @@ class Assembler:
         
     def passOne(self, content):
         """Assign addresses to each instruction and fill SYMTAB"""
+
+        endFlag = True
 
 
         #open intermediate file for writing
@@ -126,16 +133,13 @@ class Assembler:
         tempOp = ''
         
         #main iteration
-        while self.progLine < len(splitContent)-1 and 'END' not in splitContent[self.progLine]:
-
-            print(self.progLine)
+        while 'END' not in splitContent[self.progLine]:
 
             #reset e bit & tempLoc
             self.e = 0b0
             tempLoc = 0
             
             #ignore comment lines, still increment line counter
-            print(splitContent[self.progLine])
             if splitContent[self.progLine][0] == '' or splitContent[self.progLine][0][0] != '.':
 
                 #var definition for easy reference (should only happen if not a comment line)
@@ -158,7 +162,6 @@ class Assembler:
                 if operation[0] == '+':
                     tempOp = operation[1:]
                     self.e = 0b1
-                    print(self.e)
                     
                 if self.optab.search(tempOp):
                     tempLoc = max(int(self.optab.table[tempOp][1]), (self.e * 4))
@@ -170,38 +173,44 @@ class Assembler:
                     tempLoc = int(operand)
                 elif operation == 'BYTE':
                     print(operand)
-                    tempLoc = int(self.getConstLength(operand))
+                    tempLoc = int(self._getConstLength(operand))
+                elif operation == 'BASE':
+                    tempLoc = 0
                 else:
                     print("Error. Invalid opcode. Halting conversion.")
 
 
             #insert line num and locctr to line
             splitContent[self.progLine].insert(0, self.progLine)
-            print(self.locctr)
             splitContent[self.progLine].insert(1, hex(self.locctr))
 
             #write line to intermediate file
-            iFile.write(str(splitContent[self.progLine]))
-            iFile.write('\n')
+            iFile.write(self._toString(splitContent[self.progLine]))
             self.progLine += 1
             self.locctr += tempLoc
 
-        #insert line num and locctr to last line
-        splitContent[self.progLine].insert(0, self.progLine)
-        splitContent[self.progLine].insert(1, hex(self.locctr))
+            if self.progLine == len(splitContent):
+                endFlag = False
+                break;
 
-        #write last line to intermediate file
-        iFile.write(str(splitContent[self.progLine]))
-        iFile.write('\n')
+        #only do this if END was encountered
+        if endFlag:
+            
+            #insert line num and locctr to last line
+            splitContent[self.progLine].insert(0, self.progLine)
+            splitContent[self.progLine].insert(1, hex(self.locctr))
+
+            #write last line to intermediate file
+            iFile.write(self._toString(splitContent[self.progLine]))
 
         #save locctr as program length
         self.progLength = self.locctr
     
         iFile.close()
 
-        print(self.symtab.table)
+        return splitContent
 
-    def getConstLength(self, const):
+    def _getConstLength(self, const):
         """Returns the length in bytes of an integer or hex constant"""
 
         length = 0
@@ -219,12 +228,267 @@ class Assembler:
                     length += 1
             return int(length/2)                   
             return length
-                    
-                                                               
+
+    def _toString(self, arr):
+        """Function to make intermediate file easier to understand"""
+
+        string = ''
+        for element in arr[:-1]:
+            string += str(element) + '\t'
+        string += arr[-1]
+
+        return string
+
+                                                                 
     def passTwo(self, intermediate):
         """Perform object code conversions"""
-        print("Yeet")
+
+        #reset line counter
+        self.progLine = 0
+
+        #init flag bits
+        self.n = 0
+        self.i  = 0
+        self.x = 0   
+        self.p = 1
+        self.b = 0
+        self.e = 0
+
+        #init object code variables
+        current_opcode = 0
+        target_address = 0
+
+        #process first line
+        if 'START' in intermediate[0]:
+            progTitle = intermediate[0][self.OPERAND]
+            self.progLine += 1
+        #IMPLEMENT HEADER RECORD HERE
+        #IMPLEMENT FIRST TEXT RECORD
+        #main iteration
+        while self.progLine < len(intermediate)-1 and 'END' not in intermediate[self.progLine]:
+
+            #init flag bits
+            self.n = 0
+            self.i  = 0
+            self.x = 0   
+            self.p = 1
+            self.b = 0
+            self.e = 0
+
+            #if line is not a comment
+            if intermediate[2] != '.':
+
+                #increment PC
+                self._incrementPC(intermediate)
+
+                #var definition for easy reference (should only happen if not a comment line)
+                symbol = intermediate[self.progLine][self.SYMBOL+2]
+                operation = intermediate[self.progLine][self.OPCODE+2]
+                operand = intermediate[self.progLine][self.OPERAND+2]
+                tempOp = operation
+
+                #check for extended format instruction
+                if operation[0] == '+':
+                    self.e = 1
+                    operation = operation[1:]
+
+                #search optab for opcode
+                if self.optab.search(operation):
+
+                    current_opcode = self.optab.table[operation][0]
+
+                    #find addressing mode and format operand
+                    operand = self._determineAddressingMode(operand)
+
+                    #is operand a symbol or a constant?
+                    if self._isSymbol(operand):
+
+                        #search symtab for symbol
+                        
+                        if self.symtab.searchSym(operand):
+                            target_address = int(self.symtab.table[operand])
+                        else:
+                            target_address = 0
+                            print(operand)
+                            print("Error. Undefined symbol.")
+
+
+                    else:
+                        target_address = 0
+
+                    print(self._createObjCode(current_opcode, target_address))
+
+                elif operation == 'BYTE' or operation == 'WORD':
+
+                    #CONVERT CONSTANT TO OBJECT CODE
+                    print("yeet")
+            self.progLine += 1
+
+    def _determineAddressingMode(self, operand):
+        """Uses the operand to set the n, i and x bits"""
+
+        #set n and i bis
+        #immediate
+        if operand[0] == '#':
+            self.n = 0
+            self.i = 1
+            operand = operand[1:]
+        #indirect
+        elif operand[0] == '@':
+            self.n = 1
+            self.i = 0
+            operand = operand[1:]
+        #simple
+        else:
+            self.n = 1
+            self.i = 1
+
+        #set x bit
+        if ',X' in operand:
+            self.x = 1
+            operand = operand[:-2]
+        else:
+            self.x = 0
+
+        return operand
+            
+                        
+    def _isSymbol(self, operand):
+        """Returns true if operand is a symbol, returns false otherwise"""
+
+        letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+
+        for char in operand:
+            if char in letters:
+                return True
+
+        return False
+
+
+    def _incrementPC(self, file):
+        """Increments the program counter"""
+
+        temp = self.progLine
+
+        #comment lines and certain directives do not implement the locctr
+        #and thus should not increment the program counter either
         
+        while self.progCounter == int(file[temp][1][2:], 16):
+            self.progCounter = int(file[temp+1][1][2:], 16)
+            if self.progCounter == int(file[temp][1][2:], 16):
+                temp+=1
+
+        print(self.progCounter)
+
+
+    def _createObjCode(self, opcode, address):
+        """Returns a hexadecimal string representing the object code of a single instruction"""
+
+        #init string
+        objCode = ''
+
+        #convert opcode to binary string
+        opcode = bin(opcode)[2:]
+
+        #add to output string, leaving off last two bits for the n and i bit
+        objCode += opcode[:-2]
+
+        #calculate disp
+
+        #immediate
+        if self.i == 1 and self.n == 0:
+            disp = address
+        else:
+            disp = address - self.progCounter
+
+        #determine if base addressing should be used
+        if disp > 2048 or disp < -2047:
+            self.p = 0
+            self.b = 1
+
+            #calculate new disp
+            disp = address - self.baseReg
+            
+        else:
+            self.p = 1
+            self.b = 0
+
+        #convert disp to object code
+        disp = self._toBinary(disp)
+
+        #add flag bits
+        objCode = objCode + str(self.n) + str(self.i) + str(self.x) + str(self.b) + str(self.p) + str(self.e)
+
+        #add disp
+        objCode = objCode + disp
+
+        return hex(int(objCode, 2))
+
+
+    def _toBinary(self, num):
+        """Returns a binary string"""
+
+        newString = ''
+        string = ''
+
+        #extended format?
+        offset = 12 + (self.e * 8)
+
+        if num >= 0:
+
+            string = bin(num)[2:]
+
+            #leading zeroes     
+            for i in range(0, offset-len(string)):
+                newString += '0'
+            newString += string
+
+            print(newString)
+
+            return newString
+            
+        else:
+
+            #convert to binary using two's compliment
+            #create list of ones and zeros
+            string = bin(num)[3:]
+            arr =[]
+            
+            for val in range(0, len(string)):
+                arr.append(int(string[val]))
+
+
+            for char in range(0, len(arr)):
+                if arr[char] == 0:
+                    arr[char] = 1
+                else:
+                    arr[char] = 0
+
+            arr = self._addOne(arr, len(arr))
+
+            #convert back to string
+            for bit in arr:
+                newString += str(bit)
+
+            #leading ones
+            for i in range(0, offset-len(string)):
+                newString += '1'
+            newString += string
+            
+            return newString
+
+
+    def _addOne(self, yeet, length):
+
+        for val in range(length, 0, -1):
+            if yeet[val-1] == 0:
+                yeet[val-1] = 1
+                return yeet
+            else: 
+                yeet[val-1] = 0
+                length-=1
+        return 0
+ 
 
     def show_commands(self):
         """lists commands upon user request"""

@@ -1,51 +1,12 @@
-[1, '0x0', 'FIRST', 'STL', 'RETADR', '.Save Return address\n']
-[2, '0x3', '', 'LDB', '#LENGTH', '.establish base register\n']
-[3, '0x6', '', 'BASE', 'LENGTH', '\n']
-[4, '0x6', 'CLOOP', '+JSUB', 'RDREC', '.Read INPUT Record\n']
-[5, '0xa', '', 'LDA', 'LENGTH', '.Test for EOF (Length = 0)\n']
-[6, '0xd', '', 'COMP', '#0\n']
-[7, '0x10', '', 'JEQ', 'ENDFIL', '.Exit if EOF found\n']
-[8, '0x13', '', '+JSUB', 'WRREC', '.Write OUTPUT Record\n']
-[9, '0x17', '', 'J', 'CLOOP', '.Loop\n']
-[10, '0x1a', 'ENDFIL', 'LDA', 'EOF', '.Insert End Of File Marker\n']
-[11, '0x1d', '', 'STA', 'BUFFER\n']
-[12, '0x20', '', 'LDA', '#3', '.Set LENGTH = 3\n']
-[13, '0x23', '', 'STA', 'LENGTH\n']
-[14, '0x26', '', '+JSUB', 'WRREC', '.write EOF\n']
-[15, '0x2a', '', 'J', '@RETADR', '.Return to Caller\n']
-[16, '0x2d', 'EOF', 'BYTE', "C'EOF'\n"]
-[17, '0x30', 'RETADR', 'RESW', '1\n']
-[18, '0x33', 'LENGTH', 'RESW', '1', '.LENGTH of Record\n']
-[19, '0x36', 'BUFFER', 'RESB', '4096', '.4096-BYTE Buffer area\n']
-[20, '0x1036', '.\n']
-[21, '0x1036', '.', 'SUBROUTINE TO READ RECORD INTO BUFFER\n']
-[22, '0x1036', '.\n']
-[23, '0x1036', 'RDREC', 'CLEAR', 'X', '.Clear Loop counter\n']
-[24, '0x1038', '', 'CLEAR', 'A', '.Clear A to Zero\n']
-[25, '0x103a', '', 'CLEAR', 'S', '.Clear S to Zero\n']
-[26, '0x103c', '', '+LDT', '#4096\n']
-[27, '0x1040', 'RLOOP', 'TD', 'INPUT', '.Test INPUT device\n']
-[28, '0x1043', '', 'JEQ', 'RLOOP', '.LOOP until ready\n']
-[29, '0x1046', '', 'RD', 'INPUT', '.READ character into Register A\n']
-[30, '0x1049', '', 'COMPR', 'A,S', ".TEST for End Of Record (X'00')\n"]
-[31, '0x104b', '', 'JEQ', 'EXIT', '.EXIT loop if EOR\n']
-[32, '0x104e', '', 'STCH', 'BUFFER,X', '.STORE character in BUFFER\n']
-[33, '0x1051', '', 'TIXR', 'T', '.LOOP unless max Length has been reached\n']
-[34, '0x1053', '', 'JLT', 'RLOOP\n']
-[35, '0x1056', 'EXIT', 'STX', 'LENGTH', '.SAVE record length\n']
-[36, '0x1059', '', 'RSUB', '', '.Return to caller\n']
-[37, '0x105c', 'INPUT', 'BYTE', "X'F1'", '.CODE for Input device\n']
-[38, '0x105d', '.\n']
-[39, '0x105d', '.', 'SUBROUTINE TO WRITE RECORD FROM BUFFER\n']
-[40, '0x105d', '.\n']
-[41, '0x105d', 'WRREC', 'CLEAR', 'X', '.CLEAR loop counter\n']
-[42, '0x105f', '', 'LDT', 'LENGTH', '\n']
-[43, '0x1062', 'WLOOP', 'TD', 'OUTPUT', '.Test OUTPUT Device\n']
-[44, '0x1065', '', 'JEQ', 'WLOOP', '.Loop Until Ready\n']
-[45, '0x1068', '', 'LDCH', 'BUFFER,X', '.GET character form BUFFER\n']
-[46, '0x106b', '', 'WD', 'OUTPUT', '.WRITE character\n']
-[47, '0x106e', '', 'TIXR', 'T', '.LOOP until all characters have been written\n']
-[48, '0x1070', '', 'JLT', 'WLOOP\n']
-[49, '0x1073', '', 'RSUB', '', '.Return to caller\n']
-[50, '0x1076', 'OUTPUT', 'BYTE', "X'05'", '.CODE for OUPUT device\n']
-[51, '0x1077', '', 'END', 'FIRST\n']
+0	0x0		LDS	#3	.Initialize Register S to 3
+1	0x3		LDT	#300	.Initialize Register T to 300
+2	0x6		LDX	#0	.Initialize Index Register to 0
+3	0x9	ADDLP	LDA	ALPHA,X	.Load Word from ALPHA into Register A
+4	0xc		ADD	BETA,X	.Add Word From BETA
+5	0xf		STA	GAMMA,X	.Store the Result in a work in GAMMA
+6	0x12		ADDR	S,X	.ADD 3 to INDEX value
+7	0x14		COMPR	X,T	.Compare new INDEX value to 300
+8	0x16		JLT	ADDLP	.Loop if INDEX value is less than 300
+9	0x19	ALPHA	RESW	100
+10	0x145	BETA	RESW	100
+11	0x271	GAMMA	RESW	100
