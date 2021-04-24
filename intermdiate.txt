@@ -1,12 +1,51 @@
-0	0x0		LDS	#3	.Initialize Register S to 3
-1	0x3		LDT	#300	.Initialize Register T to 300
-2	0x6		LDX	#0	.Initialize Index Register to 0
-3	0x9	ADDLP	LDA	ALPHA,X	.Load Word from ALPHA into Register A
-4	0xc		ADD	BETA,X	.Add Word From BETA
-5	0xf		STA	GAMMA,X	.Store the Result in a work in GAMMA
-6	0x12		ADDR	S,X	.ADD 3 to INDEX value
-7	0x14		COMPR	X,T	.Compare new INDEX value to 300
-8	0x16		JLT	ADDLP	.Loop if INDEX value is less than 300
-9	0x19	ALPHA	RESW	100
-10	0x145	BETA	RESW	100
-11	0x271	GAMMA	RESW	100
+1	0x0	FIRST	STL	RETADR	.Save Return address
+2	0x3		LDB	#LENGTH	.establish base register
+3	0x6		BASE	LENGTH	
+4	0x6	CLOOP	+JSUB	RDREC	.Read INPUT Record
+5	0xa		LDA	LENGTH	.Test for EOF (Length = 0)
+6	0xd		COMP	#0
+7	0x10		JEQ	ENDFIL	.Exit if EOF found
+8	0x13		+JSUB	WRREC	.Write OUTPUT Record
+9	0x17		J	CLOOP	.Loop
+10	0x1a	ENDFIL	LDA	EOF	.Insert End Of File Marker
+11	0x1d		STA	BUFFER
+12	0x20		LDA	#3	.Set LENGTH = 3
+13	0x23		STA	LENGTH
+14	0x26		+JSUB	WRREC	.write EOF
+15	0x2a		J	@RETADR	.Return to Caller
+16	0x2d	EOF	BYTE	C'EOF'
+17	0x30	RETADR	RESW	1
+18	0x33	LENGTH	RESW	1	.LENGTH of Record
+19	0x36	BUFFER	RESB	4096	.4096-BYTE Buffer area
+20	0x1036	.
+21	0x1036	.	SUBROUTINE TO READ RECORD INTO BUFFER
+22	0x1036	.
+23	0x1036	RDREC	CLEAR	X	.Clear Loop counter
+24	0x1038		CLEAR	A	.Clear A to Zero
+25	0x103a		CLEAR	S	.Clear S to Zero
+26	0x103c		+LDT	#4096
+27	0x1040	RLOOP	TD	INPUT	.Test INPUT device
+28	0x1043		JEQ	RLOOP	.LOOP until ready
+29	0x1046		RD	INPUT	.READ character into Register A
+30	0x1049		COMPR	A,S	.TEST for End Of Record (X'00')
+31	0x104b		JEQ	EXIT	.EXIT loop if EOR
+32	0x104e		STCH	BUFFER,X	.STORE character in BUFFER
+33	0x1051		TIXR	T	.LOOP unless max Length has been reached
+34	0x1053		JLT	RLOOP
+35	0x1056	EXIT	STX	LENGTH	.SAVE record length
+36	0x1059		RSUB		.Return to caller
+37	0x105c	INPUT	BYTE	X'F1'	.CODE for Input device
+38	0x105d	.
+39	0x105d	.	SUBROUTINE TO WRITE RECORD FROM BUFFER
+40	0x105d	.
+41	0x105d	WRREC	CLEAR	X	.CLEAR loop counter
+42	0x105f		LDT	LENGTH	
+43	0x1062	WLOOP	TD	OUTPUT	.Test OUTPUT Device
+44	0x1065		JEQ	WLOOP	.Loop Until Ready
+45	0x1068		LDCH	BUFFER,X	.GET character form BUFFER
+46	0x106b		WD	OUTPUT	.WRITE character
+47	0x106e		TIXR	T	.LOOP until all characters have been written
+48	0x1070		JLT	WLOOP
+49	0x1073		RSUB		.Return to caller
+50	0x1076	OUTPUT	BYTE	X'05'	.CODE for OUPUT device
+51	0x1077		END	FIRST
