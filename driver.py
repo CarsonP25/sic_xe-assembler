@@ -36,7 +36,7 @@ def show_commands(self):
 a = Assembler()
 
 #greet user
-print("***-------SIC/XE Assembler Ver. 0.1-------***")
+print("***-------SIC/XE Assembler Ver. 0.5-------***")
 print("Welcome! Please enter you command.",
     "(type '-h' for a list of commands)")
 

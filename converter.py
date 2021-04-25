@@ -19,8 +19,6 @@ class Converter:
                 newString += '0'
             newString += string
 
-            print(newString)
-
             return newString
             
         else:
@@ -98,3 +96,13 @@ class Converter:
 
         return hexChar
 
+
+    def _toString(self, arr):
+        """Function to make intermediate file easier to understand"""
+
+        string = ''
+        for element in arr[:-1]:
+            string += str(element) + '\t'
+        string += arr[-1]
+
+        return string

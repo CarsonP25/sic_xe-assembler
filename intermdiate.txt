@@ -1,3 +1,4 @@
+0	0x0	COPY	START	0	.copy the file form INPUT to OUTPUT
 1	0x0	FIRST	STL	RETADR	.Save Return address
 2	0x3		LDB	#LENGTH	.establish base register
 3	0x6		BASE	LENGTH	

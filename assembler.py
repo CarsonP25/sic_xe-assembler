@@ -1,7 +1,9 @@
 #imports
 from optab import Optab
 from symtab import Symtab
+from littab import Littab
 from converter import Converter
+from util import Util
 
 #class declaration
 class Assembler:
@@ -13,9 +15,11 @@ class Assembler:
         #tables
         self.optab = Optab()
         self.symtab = Symtab()
+        self.littab = Littab()
 
         #util
         self.conv = Converter()
+        self.util = Util()
         
         #program information
         self.locctr = 0
@@ -26,12 +30,7 @@ class Assembler:
         self.progLength = 0
 
         #flag bits
-        self.n = 0
-        self.i = 0
-        self.x = 0
-        self.b = 0
-        self.p = 0
-        self.e = 0
+        self.n = self.i = self.x = self.b = self.p = self.e = 0
         
         #constants (not actaully constant)
         self.SYMBOL = 0
@@ -61,7 +60,6 @@ class Assembler:
 
         endFlag = True
 
-
         #open intermediate file for writing
         iFile = open('intermdiate.txt', 'w')
 
@@ -82,6 +80,9 @@ class Assembler:
         if firstLine[self.OPCODE] == 'START':
             self.progStart = int(firstLine[self.OPERAND])
             self.locctr = self.progStart
+            splitContent[self.progLine].insert(0, self.progLine)
+            splitContent[self.progLine].insert(1, hex(self.locctr))
+            iFile.write(self.conv._toString(splitContent[self.progLine]))
             self.progLine += 1
         else:
             self.locctr = 0
@@ -116,6 +117,13 @@ class Assembler:
                     else:
                         self.symtab.addSym(symbol, self.locctr)
 
+                        #check for literals
+                        if operand[0] == '=':
+                            if self.littab.searchLit(operand[1:]) == False:
+                                self.littab.addLit(operand, self.conv._convertConst(operand[1:]), 
+                                    self.util._getConstLength(operand[1:]), '')
+                                print(operand[1:])
+
                 #process operation column
                 #check for extended format
                 if operation[0] == '+':
@@ -132,9 +140,16 @@ class Assembler:
                     tempLoc = int(operand)
                 elif operation == 'BYTE':
                     print(operand)
-                    tempLoc = int(self._getConstLength(operand))
+                    tempLoc = int(self.util._getConstLength(operand))
                 elif operation == 'BASE':
                     tempLoc = 0
+                elif operation == 'LTORG':
+                    splitContent[self.progLine].insert(0, self.progLine)
+                    splitContent[self.progLine].insert(1, hex(self.locctr))
+                    iFile.write(self.conv._toString(splitContent[self.progLine]))
+                    self.progLine += 1
+                    splitContent = self._flushLitPool(iFile, splitContent)   
+                    continue
                 else:
                     print("Error. Invalid opcode. Halting conversion.")
 
@@ -144,7 +159,7 @@ class Assembler:
             splitContent[self.progLine].insert(1, hex(self.locctr))
 
             #write line to intermediate file
-            iFile.write(self._toString(splitContent[self.progLine]))
+            iFile.write(self.conv._toString(splitContent[self.progLine]))
             self.progLine += 1
             self.locctr += tempLoc
 
@@ -160,7 +175,9 @@ class Assembler:
             splitContent[self.progLine].insert(1, hex(self.locctr))
 
             #write last line to intermediate file
-            iFile.write(self._toString(splitContent[self.progLine]))
+            iFile.write(self.conv._toString(splitContent[self.progLine]))
+        
+        splitContent = self._flushLitPool(iFile, splitContent)
 
         #save locctr as program length
         self.progLength = self.locctr
@@ -169,35 +186,20 @@ class Assembler:
 
         return splitContent
 
-    def _getConstLength(self, const):
-        """Returns the length in bytes of an integer or hex constant"""
 
-        length = 0
+    def _flushLitPool(self, file, arr):
+        """Assign an address for each new literal"""
 
-        if const[0] == 'C':
-            for char in const[2:-2]:
-                if char != "'":
-                    length += 1
-            return length
-                
-        elif const[0] == 'X':
-            for char in const[2:-1]:
-                if char != "'":
-                    length += 1
-            return int(length/2)                   
-            return length
+        for literal in self.littab.table.keys():
+            if self.littab.table[literal][2] == '':
+                self.littab.assignAddress(literal, self.locctr)
+                self.locctr += self.littab.table[literal][1]
+                arr.insert(self.progLine, [self.progLine, hex(self.locctr), '*', literal, '\n'])
+                file.write(self.conv._toString(['X', hex(self.littab.table[literal][2]), '*', literal, '\n']))
+                self.progLine +=1
+        return arr
 
-    def _toString(self, arr):
-        """Function to make intermediate file easier to understand"""
 
-        string = ''
-        for element in arr[:-1]:
-            string += str(element) + '\t'
-        string += arr[-1]
-
-        return string
-
-                                                                 
     def passTwo(self, intermediate):
         """Perform object code conversions"""
 
@@ -239,6 +241,13 @@ class Assembler:
                 operation = intermediate[self.progLine][self.OPCODE+2]
                 operand = intermediate[self.progLine][self.OPERAND+2]
 
+                #if line is a literal definition
+                if symbol == '*':
+                    print(self.littab.table[operation][0][2:])
+                    self.progLine +=1
+                    continue
+
+
                 #check for extended format instruction
                 if operation[0] == '+':
                     self.e = 1
@@ -265,8 +274,8 @@ class Assembler:
                     #find addressing mode and format operand
                     operand = self._determineAddressingMode(operand)
 
-                    #is operand a symbol or a constant?
-                    if self._isSymbol(operand):
+                    #is operand a symbol, constant, or literal
+                    if self.util._isSymbol(operand):
 
                         #search symtab for symbol
                         if self.symtab.searchSym(operand):
@@ -274,7 +283,11 @@ class Assembler:
                         else:
                             target_address = 0
                             print("Error. Undefined symbol.")
-
+                    #literal
+                    elif operand[0] == '=':
+                        if self.littab.searchLit(operand):
+                            target_address = self.littab.table[operand][2]
+                    #constant
                     else:
                         target_address = int(operand)
                         self.p = 0
@@ -288,10 +301,9 @@ class Assembler:
                     print(self.conv._convertConst(operand))
 
                 elif operation == 'BASE':
-                    if self._isSymbol(operand):
+                    if self.util._isSymbol(operand):
                         self.baseReg = self.symtab.table[operand]
                         
-            print("----------------------------------")
             self.progLine += 1
 
 
@@ -299,12 +311,12 @@ class Assembler:
         """Uses the operand to set the n, i and x bits"""
 
         #set n and i bis
-        #immediate
         if operand == '':
             self.n == 1
             self.i == 1
             return operand
-            
+
+        #immediate
         if operand[0] == '#':
             self.n = 0
             self.i = 1
@@ -314,7 +326,7 @@ class Assembler:
             self.n = 1
             self.i = 0
             operand = operand[1:]
-        #simple
+        #simple or literal
         else:
             self.n = 1
             self.i = 1
@@ -328,18 +340,7 @@ class Assembler:
 
         return operand.rstrip()
             
-                        
-    def _isSymbol(self, operand):
-        """Returns true if operand is a symbol, returns false otherwise"""
-
-        letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
-
-        for char in operand:
-            if char in letters:
-                return True
-
-        return False
-
+                    
 
     def _incrementPC(self, file):
         """Increments the program counter"""
@@ -400,10 +401,8 @@ class Assembler:
         objCode = objCode + disp
 
         hexCode = ''
-
         for val in range(0, len(objCode), 4):
             hexCode += self.conv._toHalfByte(objCode[val:val+4])
-
         return hexCode
 
 
@@ -436,7 +435,6 @@ class Assembler:
 
         #clear symbol table
         self.symtab.table.clear()
-
 
 #end class def
 
