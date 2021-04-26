@@ -7,12 +7,10 @@ class Util:
 	    letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
 
 	    length = 0
-	    print(const)
 	    if const[0] == 'C':
 	        for char in const[2:]:
 	            if char in letters:
 	                length += 1
-	                print(length)
 	        return length
 	            
 	    elif const[0] == 'X':

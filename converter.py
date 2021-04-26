@@ -101,8 +101,15 @@ class Converter:
         """Function to make intermediate file easier to understand"""
 
         string = ''
-        for element in arr[:-1]:
-            string += str(element) + '\t'
-        string += arr[-1]
+        for element in arr:
+            if '.' not in str(element):
+                string += str(element).rstrip() 
+                if len(str(element)) <= 7:
+                    string += '\t'
+            else:
+                if element == arr[2]:
+                    return ""
+
+        string += '\n'
 
         return string

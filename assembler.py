@@ -203,6 +203,8 @@ class Assembler:
     def passTwo(self, intermediate):
         """Perform object code conversions"""
 
+        eFile = open('prog.txt', 'w')
+
         #reset line counter
         self.progLine = 0
 
@@ -218,6 +220,7 @@ class Assembler:
         #process first line
         if 'START' in intermediate[0]:
             progTitle = intermediate[0][self.OPERAND]
+            eFile.write(self.conv._toString(intermediate[self.progLine]))
             self.progLine += 1
         #IMPLEMENT HEADER RECORD HERE
         #IMPLEMENT FIRST TEXT RECORD
@@ -247,7 +250,6 @@ class Assembler:
                     self.progLine +=1
                     continue
 
-
                 #check for extended format instruction
                 if operation[0] == '+':
                     self.e = 1
@@ -260,7 +262,8 @@ class Assembler:
 
                     #JSUB will always generate the same objcode
                     if operation == 'RSUB':
-                        print(hex(0x4f0000))
+                        intermediate[self.progLine].append('\t' + hex(0x4f0000))
+                        eFile.write(self.conv._toString(intermediate[self.progLine]))
                         self.progLine += 1
                         continue
 
@@ -268,7 +271,9 @@ class Assembler:
 
                     #is this a format 2 or format 3/4 instruction
                     if self.optab.table[operation][1] == 2:
-                        print(self._formatTwoObjCode(current_opcode, operand))
+                        intermediate[self.progLine].append('\t' + self._formatTwoObjCode(current_opcode, operand))
+                        eFile.write(self.conv._toString(intermediate[self.progLine]))
+                        self.progLine += 1
                         continue
 
                     #find addressing mode and format operand
@@ -293,18 +298,29 @@ class Assembler:
                         self.p = 0
                         self.b = 0
 
-                    print(self._createObjCode(current_opcode, target_address))
+                    intermediate[self.progLine].append('\t' + self._createObjCode(current_opcode, target_address))
+                    eFile.write(self.conv._toString(intermediate[self.progLine]))
+                    self.progLine += 1
+                    continue
 
                 elif operation == 'BYTE' or operation == 'WORD':
 
                     #CONVERT CONSTANT TO OBJECT CODE
-                    print(self.conv._convertConst(operand))
+                    intermediate[self.progLine].append('\t' + self.conv._convertConst(operand))
+                    eFile.write(self.conv._toString(intermediate[self.progLine]))
+                    self.progLine += 1
+                    continue
 
                 elif operation == 'BASE':
                     if self.util._isSymbol(operand):
                         self.baseReg = self.symtab.table[operand]
                         
+            eFile.write(self.conv._toString(intermediate[self.progLine]))            
             self.progLine += 1
+
+        #write last line
+        eFile.write(self.conv._toString(intermediate[self.progLine]))
+        eFile.close()
 
 
     def _determineAddressingMode(self, operand):
@@ -418,7 +434,6 @@ class Assembler:
             except IndexError:
                 objCode += '0'
 
-        self.progLine += 1
         return objCode
 
 
