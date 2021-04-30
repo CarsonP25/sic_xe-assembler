@@ -28,6 +28,7 @@ class Assembler:
         self.progStart = 0
         self.progLine = 0
         self.progLength = 0
+        self.progTitle = ''
 
         #flag bits
         self.n = self.i = self.x = self.b = self.p = self.e = 0
@@ -61,7 +62,7 @@ class Assembler:
         endFlag = True
 
         #open intermediate file for writing
-        iFile = open('intermdiate.txt', 'w')
+        iFile = open('intermediate.txt', 'w')
 
         splitContent = []
         tempLoc = 0
@@ -78,6 +79,7 @@ class Assembler:
 
         #check for START directive
         if firstLine[self.OPCODE] == 'START':
+            self.progTitle = firstLine[self.SYMBOL]
             self.progStart = int(firstLine[self.OPERAND])
             self.locctr = self.progStart
             splitContent[self.progLine].insert(0, self.progLine)
@@ -180,9 +182,20 @@ class Assembler:
         splitContent = self._flushLitPool(iFile, splitContent)
 
         #save locctr as program length
-        self.progLength = self.locctr
+        self.progLength = self.locctr - self.progStart
     
         iFile.close()
+
+        #return formatted file content
+        iFile_r = open('intermediate.txt', 'r')
+
+        content = iFile_r.readlines()
+        splitContent = []
+        for line in content:
+            splitLine = line.split('\t')
+            for string in splitLine:
+                string.strip()
+            splitContent.append(splitLine)
 
         return splitContent
 
@@ -203,7 +216,10 @@ class Assembler:
     def passTwo(self, intermediate):
         """Perform object code conversions"""
 
+        print(intermediate)
+
         eFile = open('prog.txt', 'w')
+        oFile = open(self.progTitle.lower() + '.txt', 'w')
 
         #reset line counter
         self.progLine = 0
@@ -216,14 +232,21 @@ class Assembler:
         current_opcode = 0
         target_address = 0
         objCode = ''
+        curTextRecord = ''
+        modRecords = ''
 
         #process first line
         if 'START' in intermediate[0]:
-            progTitle = intermediate[0][self.OPERAND]
+            self.progTitle = intermediate[0][self.OPERAND]
             eFile.write(self.conv._toString(intermediate[self.progLine]))
+            self._headerRecord(oFile)
+            curTextRecord = self._newTextRecord(oFile, intermediate[0][1])
             self.progLine += 1
-        #IMPLEMENT HEADER RECORD HERE
-        #IMPLEMENT FIRST TEXT RECORD
+        else:
+            self.progTitle = 'untitled'
+            curTextRecord = self._newTextRecord(oFile, intermediate[0][1])
+
+
         #main iteration
         while self.progLine < len(intermediate)-1 and 'END' not in intermediate[self.progLine]:
 
@@ -262,7 +285,8 @@ class Assembler:
 
                     #JSUB will always generate the same objcode
                     if operation == 'RSUB':
-                        intermediate[self.progLine].append('\t' + hex(0x4f0000))
+                        intermediate[self.progLine].append('\t' + hex(0x4f0000)[2:])
+                        curTextRecord = self._addToTextRecord(oFile, hex(0x4f0000)[2:], intermediate[self.progLine][1], curTextRecord)
                         eFile.write(self.conv._toString(intermediate[self.progLine]))
                         self.progLine += 1
                         continue
@@ -271,7 +295,9 @@ class Assembler:
 
                     #is this a format 2 or format 3/4 instruction
                     if self.optab.table[operation][1] == 2:
-                        intermediate[self.progLine].append('\t' + self._formatTwoObjCode(current_opcode, operand))
+                        objCode = self._formatTwoObjCode(current_opcode, operand)
+                        intermediate[self.progLine].append('\t' + objCode)
+                        curTextRecord = self._addToTextRecord(oFile, objCode, intermediate[self.progLine][1], curTextRecord)
                         eFile.write(self.conv._toString(intermediate[self.progLine]))
                         self.progLine += 1
                         continue
@@ -298,15 +324,21 @@ class Assembler:
                         self.p = 0
                         self.b = 0
 
-                    intermediate[self.progLine].append('\t' + self._createObjCode(current_opcode, target_address))
+                    objCode = self._createObjCode(current_opcode, target_address)
+                    intermediate[self.progLine].append('\t' + objCode)
+                    curTextRecord = self._addToTextRecord(oFile, objCode, intermediate[self.progLine][1], curTextRecord)
                     eFile.write(self.conv._toString(intermediate[self.progLine]))
+                    if self.b==0 and self.p==0 and self.util._isSymbol(operand):
+                        modRecords += 'M' + '0' * (6 - len(hex(int(intermediate[self.progLine][1], 16) + 1)[2:])) + hex(int(intermediate[self.progLine][1], 16) + 1)[2:] + '05' + '\n'
                     self.progLine += 1
                     continue
 
                 elif operation == 'BYTE' or operation == 'WORD':
 
                     #CONVERT CONSTANT TO OBJECT CODE
-                    intermediate[self.progLine].append('\t' + self.conv._convertConst(operand))
+                    objCode = self.conv._convertConst(operand)
+                    intermediate[self.progLine].append('\t' + objCode)
+                    curTextRecord = self._addToTextRecord(oFile, objCode, intermediate[self.progLine][1], curTextRecord)
                     eFile.write(self.conv._toString(intermediate[self.progLine]))
                     self.progLine += 1
                     continue
@@ -314,13 +346,25 @@ class Assembler:
                 elif operation == 'BASE':
                     if self.util._isSymbol(operand):
                         self.baseReg = self.symtab.table[operand]
-                        
-            eFile.write(self.conv._toString(intermediate[self.progLine]))            
+                        eFile.write(self.conv._toString(intermediate[self.progLine]))
+                        self.progLine += 1
+                        continue
+
+            eFile.write(self.conv._toString(intermediate[self.progLine]))
+            if len(curTextRecord) != 7:
+                print('yeet')
+                oFile.write(curTextRecord[0:7] + hex(len(curTextRecord[7:])//2)[2:] + curTextRecord[7:] + '\n')
+                curTextRecord = self._newTextRecord(oFile, intermediate[self.progLine][1])            
             self.progLine += 1
 
-        #write last line
+        #write last line and last text record
         eFile.write(self.conv._toString(intermediate[self.progLine]))
+        if len(curTextRecord) > 7:
+            oFile.write(curTextRecord[0:7] + hex(len(curTextRecord[7:])//2)[2:] + curTextRecord[7:] + '\n')
+        oFile.write(modRecords)
+        self._endRecord(oFile)
         eFile.close()
+        oFile.close()
 
 
     def _determineAddressingMode(self, operand):
@@ -435,6 +479,66 @@ class Assembler:
                 objCode += '0'
 
         return objCode
+
+
+    def _headerRecord(self, file):
+        """Creates a header record and writes it to the file."""
+        record = 'H'
+
+        #add program title
+        offset = 6 - len(self.progTitle)
+        record += self.progTitle + ' ' * offset
+
+        #add starting address
+        offset = 6 - len(hex(self.progStart)[2:])
+        record += '0' * offset + hex(self.progStart)[2:]
+
+        #add program length 
+        offset = 6 - len(hex(self.progLength)[2:])
+        record += '0' * offset + hex(self.progLength)[2:]
+
+        file.write(record + '\n')
+
+
+    def _endRecord(self, file):
+        """Creates an end record and writes it to the file"""
+        record = 'E'
+
+        #add address of first instruction
+        offset = 6 - len(hex(self.progStart)[2:])
+        record += '0' * offset + hex(self.progStart)[2:]
+
+        file.write(record + '\n')
+
+
+    def _newTextRecord(self, file, address, objCode=''):
+        """Initializes a new text record"""
+        record = 'T'
+
+        #add starting address of objCode in this record
+        offset = 6 - len(address[2:])
+        record += '0' * offset + address[2:] + objCode
+
+        return record
+
+
+    def _addToTextRecord(self, file, objCode, address, record):
+        """If there is room, add to text record."""
+
+        print(objCode)
+
+        #check length of text record
+        if len(record) + len(objCode) > 69:
+            #determine length of record
+            wholeRecord = record[0:7] + hex(len(record[7:])//2)[2:] + record[7:]
+            file.write(wholeRecord + '\n')
+            record = self._newTextRecord(file, address, objCode)
+            return record
+        else:
+            record += objCode
+            return record
+
+
 
 
     def reset(self):

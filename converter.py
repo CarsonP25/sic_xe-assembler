@@ -73,7 +73,7 @@ class Converter:
                 if char != "'":
                     hexString += hex(ord(char))[2:]
 
-            return hex(int(hexString, 16))
+            return hex(int(hexString, 16))[2:]
 
         #hex constant
         else:
@@ -81,7 +81,8 @@ class Converter:
                 if char != "'":
                     hexString += char
 
-            return hex(int(hexString, 16))
+            constStr = hex(int(hexString, 16))
+            return '0' * (len(constStr) % 2) + constStr[2:]
             
             
     def _toHalfByte(self, num):
